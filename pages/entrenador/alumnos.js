@@ -7,7 +7,7 @@ import * as XLSX from 'xlsx'
 const CATEGORIAS = ['U13', 'U14', 'U15', 'U17', 'U18', 'U19', 'Adulto']
 
 const FORM_INICIAL = {
-  nombre: '', rut: '', fecha_nacimiento: '', enfermedades: '',
+  nombre: '', rut: '', fecha_nacimiento: '', email: '', enfermedades: '',
   contacto_emergencia_nombre: '', contacto_emergencia_telefono: ''
 }
 
@@ -41,7 +41,7 @@ export default function Alumnos() {
     setGuardando(true)
     try {
       const categoria = calcularCategoria(form.fecha_nacimiento)
-      const datos = { ...form, categoria, rut: formatearRut(form.rut) }
+      const datos = { ...form, categoria, rut: formatearRut(form.rut), email: form.email.toLowerCase().trim() }
       if (editando) {
         const { error } = await supabase.from('alumnos').update({ ...datos, updated_at: new Date().toISOString() }).eq('id', editando)
         if (error) throw error
@@ -152,6 +152,7 @@ export default function Alumnos() {
             <form onSubmit={handleGuardar} className="space-y-3">
               <div><label className="label">Nombre completo</label><input className="input" value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})} required /></div>
               <div><label className="label">RUT</label><input className="input" placeholder="12.345.678-9" value={form.rut} onChange={e => setForm({...form, rut: e.target.value})} required /></div>
+              <div><label className="label">Email del alumno</label><input type="email" className="input" placeholder="alumno@email.com" value={form.email} onChange={e => setForm({...form, email: e.target.value})} required /></div>
               <div>
                 <label className="label">Fecha de nacimiento</label>
                 <input type="date" className="input" value={form.fecha_nacimiento} onChange={e => setForm({...form, fecha_nacimiento: e.target.value})} required />
