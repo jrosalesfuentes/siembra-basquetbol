@@ -7,6 +7,7 @@ import toast from 'react-hot-toast'
 const navEntrenador = [
   { href: '/entrenador/dashboard', label: 'Dashboard', icon: '▦' },
   { href: '/entrenador/alumnos', label: 'Alumnos', icon: '◉' },
+  { href: '/entrenador/solicitudes', label: 'Solicitudes', icon: '🔔' },
   { href: '/entrenador/evaluaciones', label: 'Evaluaciones', icon: '◈' },
   { href: '/entrenador/calendario', label: 'Calendario', icon: '▤' },
   { href: '/entrenador/asistencia', label: 'Asistencia', icon: '✓' },
