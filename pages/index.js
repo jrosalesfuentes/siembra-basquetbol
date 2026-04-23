@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useRouter } from 'next/router'
 import toast from 'react-hot-toast'
+import Link from 'next/link'
 
 export default function Login() {
   const router = useRouter()
@@ -24,9 +25,31 @@ export default function Login() {
 
       if (usuario?.rol === 'entrenador') {
         router.push('/entrenador/dashboard')
-      } else {
-        router.push('/alumno/dashboard')
+        return
       }
+
+      // Para alumnos verificar estado de acceso
+      const { data: alumno } = await supabase
+        .from('alumnos')
+        .select('estado_acceso')
+        .eq('usuario_id', data.user.id)
+        .single()
+
+      if (alumno?.estado_acceso === 'pendiente') {
+        await supabase.auth.signOut()
+        toast.error('Tu cuenta está pendiente de aprobación por el entrenador.')
+        setLoading(false)
+        return
+      }
+
+      if (alumno?.estado_acceso === 'rechazado') {
+        await supabase.auth.signOut()
+        toast.error('Tu acceso fue rechazado. Contacta al entrenador.')
+        setLoading(false)
+        return
+      }
+
+      router.push('/alumno/dashboard')
     } catch (error) {
       toast.error('Email o contraseña incorrectos')
     } finally {
@@ -48,34 +71,21 @@ export default function Login() {
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
               <label className="label">Email</label>
-              <input
-                type="email"
-                className="input"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="tu@email.com"
-                required
-              />
+              <input type="email" className="input" value={email} onChange={e => setEmail(e.target.value)} placeholder="tu@email.com" required />
             </div>
             <div>
               <label className="label">Contraseña</label>
-              <input
-                type="password"
-                className="input"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-              />
+              <input type="password" className="input" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required />
             </div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-[#29ABE2] text-white py-2.5 rounded-lg font-medium hover:bg-[#1a94cc] transition-colors disabled:opacity-50"
-            >
+            <button type="submit" disabled={loading}
+              className="w-full bg-[#29ABE2] text-white py-2.5 rounded-lg font-medium hover:bg-[#1a94cc] transition-colors disabled:opacity-50">
               {loading ? 'Ingresando...' : 'Ingresar'}
             </button>
           </form>
+          <p className="text-center text-sm text-gray-400 mt-4">
+            ¿Primera vez?{' '}
+            <Link href="/registro" className="text-[#29ABE2] hover:underline">Crear cuenta</Link>
+          </p>
         </div>
 
         <p className="text-center text-white/40 text-xs mt-6">
