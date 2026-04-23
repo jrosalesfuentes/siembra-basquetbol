@@ -1,0 +1,62 @@
+@import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --club-celeste: #29ABE2;
+  --club-marino: #1B2A5E;
+  --club-naranja: #E8722A;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Barlow', sans-serif;
+  background-color: #f0f4f8;
+}
+
+.sidebar-nav-item {
+  @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-white/60 hover:bg-white/10 hover:text-white transition-all duration-150 w-full text-left;
+}
+
+.sidebar-nav-item.active {
+  background-color: var(--club-celeste);
+  color: white;
+}
+
+.btn-primary {
+  @apply bg-[#29ABE2] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#1a94cc] transition-colors;
+}
+
+.btn-secondary {
+  @apply border border-[#29ABE2] text-[#29ABE2] px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#E8F7FF] transition-colors;
+}
+
+.btn-danger {
+  @apply bg-[#E8722A] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#c55f20] transition-colors;
+}
+
+.card {
+  @apply bg-white rounded-xl border border-gray-100 p-5;
+}
+
+.pill {
+  @apply text-xs px-2.5 py-1 rounded-full font-medium;
+}
+
+.pill-green { @apply bg-green-50 text-green-700; }
+.pill-red { @apply bg-red-50 text-red-700; }
+.pill-yellow { @apply bg-amber-50 text-amber-700; }
+.pill-gray { @apply bg-gray-100 text-gray-600; }
+.pill-blue { @apply bg-[#E8F7FF] text-[#1B2A5E]; }
+
+.input {
+  @apply w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#29ABE2] focus:ring-1 focus:ring-[#29ABE2];
+}
+
+.label {
+  @apply block text-xs font-medium text-gray-500 mb-1;
+}
