@@ -12,6 +12,7 @@ const navEntrenador = [
   { href: '/entrenador/calendario', label: 'Calendario', icon: '▤' },
   { href: '/entrenador/asistencia', label: 'Asistencia', icon: '✓' },
   { href: '/entrenador/pagos', label: 'Pagos', icon: '$' },
+  { href: '/entrenador/notificaciones', label: 'Notificaciones', icon: '📣' },
 ]
 
 const navAlumno = [
