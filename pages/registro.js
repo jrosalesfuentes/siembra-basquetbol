@@ -1,95 +1,100 @@
 import { useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase, calcularCategoria, formatearRut } from '../lib/supabase'
 import { useRouter } from 'next/router'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 
+const PASO1 = { email: '', password: '', confirmar: '' }
+const PASO2 = {
+  nombre: '', rut: '', fecha_nacimiento: '',
+  enfermedades: '',
+  contacto_emergencia_nombre: '', contacto_emergencia_telefono: ''
+}
+
 export default function Registro() {
   const router = useRouter()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [confirmar, setConfirmar] = useState('')
+  const [paso, setPaso] = useState(1)
+  const [cred, setCred] = useState(PASO1)
+  const [form, setForm] = useState(PASO2)
   const [loading, setLoading] = useState(false)
-  const [paso, setPaso] = useState(1) // 1: formulario, 2: pendiente aprobación
+  const [userId, setUserId] = useState(null)
 
-  const handleRegistro = async (e) => {
+  // PASO 1 — Crear cuenta con email y contraseña
+  const handlePaso1 = async (e) => {
     e.preventDefault()
-    if (password !== confirmar) { toast.error('Las contraseñas no coinciden'); return }
-    if (password.length < 6) { toast.error('La contraseña debe tener al menos 6 caracteres'); return }
+    if (cred.password !== cred.confirmar) { toast.error('Las contraseñas no coinciden'); return }
+    if (cred.password.length < 6) { toast.error('La contraseña debe tener al menos 6 caracteres'); return }
     setLoading(true)
     try {
-      // 1. Verificar que el email existe en una ficha creada por el entrenador
-      const { data: alumnoExistente, error: errorBusqueda } = await supabase
-        .from('alumnos')
-        .select('id, nombre, estado_acceso, usuario_id')
-        .eq('email', email.toLowerCase().trim())
-        .single()
-
-      if (errorBusqueda || !alumnoExistente) {
-        toast.error('Este email no está registrado por el entrenador. Contacta al entrenador primero.')
-        setLoading(false)
-        return
-      }
-
-      if (alumnoExistente.usuario_id) {
-        toast.error('Este email ya tiene una cuenta creada. Intenta iniciar sesión.')
-        setLoading(false)
-        return
-      }
-
-      if (alumnoExistente.estado_acceso === 'pendiente') {
-        toast.error('Ya tienes una solicitud pendiente. Espera la aprobación del entrenador.')
-        setLoading(false)
-        return
-      }
-
-      if (alumnoExistente.estado_acceso === 'rechazado') {
-        toast.error('Tu solicitud fue rechazada. Contacta al entrenador.')
-        setLoading(false)
-        return
-      }
-
-      // 2. Crear cuenta en Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: email.toLowerCase().trim(),
-        password,
+      const { data, error } = await supabase.auth.signUp({
+        email: cred.email.toLowerCase().trim(),
+        password: cred.password,
       })
-      if (authError) throw authError
+      if (error) throw error
 
-      // 3. Crear registro en tabla usuarios con rol alumno
+      // Crear registro en usuarios
       const { error: usuarioError } = await supabase.from('usuarios').insert([{
-        id: authData.user.id,
-        email: email.toLowerCase().trim(),
-        nombre: alumnoExistente.nombre,
+        id: data.user.id,
+        email: cred.email.toLowerCase().trim(),
+        nombre: 'Por completar',
         rol: 'alumno'
       }])
       if (usuarioError) throw usuarioError
 
-      // 4. Actualizar ficha del alumno: vincular usuario y marcar como pendiente
-      const { error: alumnoError } = await supabase
-        .from('alumnos')
-        .update({
-          usuario_id: authData.user.id,
-          estado_acceso: 'pendiente'
-        })
-        .eq('id', alumnoExistente.id)
+      setUserId(data.user.id)
+      setPaso(2)
+    } catch (error) {
+      if (error.message?.includes('already registered')) {
+        toast.error('Este email ya tiene una cuenta. Intenta iniciar sesión.')
+      } else {
+        toast.error(error.message || 'Error al crear cuenta')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // PASO 2 — Completar datos personales
+  const handlePaso2 = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      const categoria = calcularCategoria(form.fecha_nacimiento)
+
+      // Crear ficha del alumno
+      const { error: alumnoError } = await supabase.from('alumnos').insert([{
+        usuario_id: userId,
+        nombre: form.nombre,
+        rut: formatearRut(form.rut),
+        fecha_nacimiento: form.fecha_nacimiento,
+        categoria,
+        email: cred.email.toLowerCase().trim(),
+        enfermedades: form.enfermedades || null,
+        contacto_emergencia_nombre: form.contacto_emergencia_nombre,
+        contacto_emergencia_telefono: form.contacto_emergencia_telefono,
+        estado_acceso: 'pendiente',
+        activo: false
+      }])
       if (alumnoError) throw alumnoError
 
-      // 5. Enviar notificación al entrenador
+      // Actualizar nombre en usuarios
+      await supabase.from('usuarios').update({ nombre: form.nombre }).eq('id', userId)
+
+      // Notificar al entrenador
       await fetch('/api/notificaciones/enviar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           titulo: 'Nueva solicitud de acceso',
-          mensaje: `${alumnoExistente.nombre} solicita acceso a la app`
+          mensaje: `${form.nombre} solicita unirse a Siembra Basketball`
         })
       })
 
-      // Cerrar sesión hasta que sea aprobado
+      // Cerrar sesión hasta ser aprobado
       await supabase.auth.signOut()
-      setPaso(2)
+      setPaso(3)
     } catch (error) {
-      toast.error(error.message || 'Error al registrarse')
+      toast.error(error.message || 'Error al guardar datos')
     } finally {
       setLoading(false)
     }
@@ -98,32 +103,45 @@ export default function Registro() {
   return (
     <div className="min-h-screen bg-[#1B2A5E] flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <img src="/logo.png" alt="Siembra Basketball" className="w-24 h-24 mx-auto mb-4 rounded-full bg-white p-1" />
+        <div className="text-center mb-6">
+          <img src="/logo.png" alt="Siembra Basketball" className="w-20 h-20 mx-auto mb-3" />
           <h1 className="font-display text-3xl font-bold text-white tracking-wide">SIEMBRA</h1>
           <p className="text-[#29ABE2] text-sm mt-1">Basketball Buin</p>
         </div>
 
-        {paso === 1 ? (
+        {/* Indicador de pasos */}
+        {paso < 3 && (
+          <div className="flex items-center justify-center gap-2 mb-5">
+            {[1, 2].map(n => (
+              <div key={n} className="flex items-center gap-2">
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${paso >= n ? 'bg-[#29ABE2] text-white' : 'bg-white/20 text-white/40'}`}>{n}</div>
+                {n < 2 && <div className={`w-8 h-0.5 ${paso > n ? 'bg-[#29ABE2]' : 'bg-white/20'}`}></div>}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* PASO 1 — Cuenta */}
+        {paso === 1 && (
           <div className="bg-white rounded-2xl p-6 shadow-xl">
             <h2 className="text-lg font-semibold text-[#1B2A5E] mb-1">Crear cuenta</h2>
-            <p className="text-xs text-gray-400 mb-5">Usa el email que el entrenador registró para ti</p>
-            <form onSubmit={handleRegistro} className="space-y-4">
+            <p className="text-xs text-gray-400 mb-5">Paso 1 de 2 — Datos de acceso</p>
+            <form onSubmit={handlePaso1} className="space-y-4">
               <div>
                 <label className="label">Email</label>
-                <input type="email" className="input" value={email} onChange={e => setEmail(e.target.value)} placeholder="tu@email.com" required />
+                <input type="email" className="input" value={cred.email} onChange={e => setCred({...cred, email: e.target.value})} placeholder="tu@email.com" required />
               </div>
               <div>
                 <label className="label">Contraseña</label>
-                <input type="password" className="input" value={password} onChange={e => setPassword(e.target.value)} placeholder="Mínimo 6 caracteres" required />
+                <input type="password" className="input" value={cred.password} onChange={e => setCred({...cred, password: e.target.value})} placeholder="Mínimo 6 caracteres" required />
               </div>
               <div>
                 <label className="label">Confirmar contraseña</label>
-                <input type="password" className="input" value={confirmar} onChange={e => setConfirmar(e.target.value)} placeholder="Repite tu contraseña" required />
+                <input type="password" className="input" value={cred.confirmar} onChange={e => setCred({...cred, confirmar: e.target.value})} placeholder="Repite tu contraseña" required />
               </div>
               <button type="submit" disabled={loading}
                 className="w-full bg-[#29ABE2] text-white py-2.5 rounded-lg font-medium hover:bg-[#1a94cc] transition-colors disabled:opacity-50">
-                {loading ? 'Registrando...' : 'Crear cuenta'}
+                {loading ? 'Creando cuenta...' : 'Continuar →'}
               </button>
             </form>
             <p className="text-center text-sm text-gray-400 mt-4">
@@ -131,14 +149,56 @@ export default function Registro() {
               <Link href="/" className="text-[#29ABE2] hover:underline">Inicia sesión</Link>
             </p>
           </div>
-        ) : (
+        )}
+
+        {/* PASO 2 — Datos personales */}
+        {paso === 2 && (
+          <div className="bg-white rounded-2xl p-6 shadow-xl">
+            <h2 className="text-lg font-semibold text-[#1B2A5E] mb-1">Tus datos</h2>
+            <p className="text-xs text-gray-400 mb-5">Paso 2 de 2 — Información personal</p>
+            <form onSubmit={handlePaso2} className="space-y-3">
+              <div>
+                <label className="label">Nombre completo</label>
+                <input className="input" value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})} placeholder="Nombre y apellidos" required />
+              </div>
+              <div>
+                <label className="label">RUT</label>
+                <input className="input" value={form.rut} onChange={e => setForm({...form, rut: e.target.value})} placeholder="12.345.678-9" required />
+              </div>
+              <div>
+                <label className="label">Fecha de nacimiento</label>
+                <input type="date" className="input" value={form.fecha_nacimiento} onChange={e => setForm({...form, fecha_nacimiento: e.target.value})} required />
+                {form.fecha_nacimiento && (
+                  <p className="text-xs text-[#29ABE2] mt-1">Categoría: <strong>{calcularCategoria(form.fecha_nacimiento)}</strong></p>
+                )}
+              </div>
+              <div>
+                <label className="label">Enfermedades o condiciones de salud</label>
+                <textarea className="input h-14 resize-none" value={form.enfermedades} onChange={e => setForm({...form, enfermedades: e.target.value})} placeholder="Ninguna" />
+              </div>
+              <div>
+                <label className="label">Nombre contacto de emergencia</label>
+                <input className="input" value={form.contacto_emergencia_nombre} onChange={e => setForm({...form, contacto_emergencia_nombre: e.target.value})} required />
+              </div>
+              <div>
+                <label className="label">Teléfono contacto de emergencia</label>
+                <input type="tel" className="input" value={form.contacto_emergencia_telefono} onChange={e => setForm({...form, contacto_emergencia_telefono: e.target.value})} placeholder="+56 9 1234 5678" required />
+              </div>
+              <button type="submit" disabled={loading}
+                className="w-full bg-[#29ABE2] text-white py-2.5 rounded-lg font-medium hover:bg-[#1a94cc] transition-colors disabled:opacity-50">
+                {loading ? 'Enviando solicitud...' : 'Enviar solicitud'}
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* PASO 3 — Pendiente */}
+        {paso === 3 && (
           <div className="bg-white rounded-2xl p-6 shadow-xl text-center">
             <div className="text-5xl mb-4">⏳</div>
-            <h2 className="text-lg font-bold text-[#1B2A5E] mb-2">Solicitud enviada</h2>
-            <p className="text-sm text-gray-500 mb-4">
-              Tu cuenta fue creada correctamente. El entrenador debe aprobar tu acceso antes de que puedas ingresar.
-            </p>
-            <p className="text-xs text-gray-400 mb-5">Te avisaremos cuando seas aprobado.</p>
+            <h2 className="text-lg font-bold text-[#1B2A5E] mb-2">¡Solicitud enviada!</h2>
+            <p className="text-sm text-gray-500 mb-2">Tus datos fueron registrados correctamente.</p>
+            <p className="text-sm text-gray-500 mb-5">La entrenadora debe aprobar tu acceso antes de que puedas ingresar. Te avisaremos cuando seas aprobado.</p>
             <Link href="/" className="btn-primary w-full block text-center">Volver al inicio</Link>
           </div>
         )}
